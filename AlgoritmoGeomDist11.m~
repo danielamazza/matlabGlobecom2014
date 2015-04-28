@@ -4,7 +4,7 @@ close all;
 % In this case we are considering Throughput as Utility Function 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % generation of pseudo random position for SMDs and association of APP
-NMDmax = 500;
+NMDmax = 5000;
 rng(1);
 pos = rand(2,NMDmax);
 rng(1);
@@ -12,8 +12,8 @@ app_n = randi(3,1,NMDmax);
 
 % Biased Randomization Values:
 p = 0.01; % 
-Nloop = 10;
-NMD = [500];
+Nloop = 1;
+NMD = [5 10 20 500 1000 2000];
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -47,9 +47,9 @@ M = length(RAT); % number of RAT
 % Stro - reference value for f1(Str)
 % Eo - reference value for f2(E) 
 % To - reference value for f3(T)
-App1 = Application(2E7,10, 0.01,0.9,0.6,0.2,0.2,0.52e3,     2.9e3      ,25000 ); % application 1
-App2 = Application(1E7,10 ,0.01,0.9,0.2,0.2,0.6,1.42e3,     3.6e3       ,2500 ); % application 2
-App3 = Application(1.5E7,10 ,0.01,0.9,0.2,0.6,0.2,0.93e3,     7.1e3      ,75000 ); % application 3
+App1 = Application(10E7,10E5,0.9,0.25,0.6,0.2,0.2,0.52e3,     2.9e3      ,25000 ); % application 1
+App2 = Application(10E5,10E7,0.1,0.07,0.2,0.2,0.6,1.42e3,     3.6e3       ,2500 ); % application 2
+App3 = Application(10E7,10E7,0.7,0.35,0.2,0.6,0.2,0.93e3,     7.1e3      ,75000 ); % application 3
 App = [App1,App2,App3]; % App vector instance
 
 % Cloudserver instance
@@ -77,14 +77,13 @@ for j=1:NMDmax  % N = number of devices
    app(j) = App(app_n(j));
 end
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
 %
 %  algorithm 0: Near Cell Association
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 for N = NMD
-clearvars -except MD app CS1 RAT N M NMD p Nloop Sdef ...
+clearvars -except MD app CS1 RAT N M NMD p Nloop ...
     S_mindist_av E_mindist_av T_mindist_av ...
     S_M_av       E_M_av       T_M_av ...
     S_RND_av     E_RND_av     T_RND_av ...
@@ -93,8 +92,7 @@ clearvars -except MD app CS1 RAT N M NMD p Nloop Sdef ...
 close all;
 for j=1:N 
     for i=1:4
-        dist(j,i)= Distanza(RAT(i),MD(j));
-        Th_K(j,i)= RAT(i).BWtot * log2(1+MD(j).SNR/(dist(j,i)^2));
+        dist(j,i)= Distanza(RAT(i),MD(j));                    
     end
     distmin(j)= min(dist(j,:));
     ratsceltadist(j) = find(dist(j,:) == distmin(j),1, 'first');
@@ -164,9 +162,11 @@ for i = 1:M
 end
 % S E T  computation for a single device, considering the chosen assignations 
 for j=1:N
-    S_M(j)= Str(RAT(ratscelta(j)),MD(j));
-    E_M(j)= EnergiapartialOD(RAT(ratscelta(j)),MD(j),app(j),CS1);
-    T_M(j)= TempopartialOD(RAT(ratscelta(j)),MD(j),app(j),CS1); 
+    
+        S_M(j)= Str(RAT(ratscelta(j)),MD(j));
+        E_M(j)= EnergiapartialOD(RAT(ratscelta(j)),MD(j),app(j),CS1);
+        T_M(j)= TempopartialOD(RAT(ratscelta(j)),MD(j),app(j),CS1);
+   
 end
 
 % mean values of S E T and Utility Functon
@@ -224,8 +224,14 @@ for w=1:Nloop % number of loops calculating biased randomization
  connected = [0 0 0 0];
 
  for j= 1:N
-     connected(ratsceltaRND(j)) = connected(ratsceltaRND(j))+1;
+      if connected(ratsceltaRND(j))<100
+         connected(ratsceltaRND(j)) = connected(ratsceltaRND(j))+1;
+      else
+          ratsceltaRND(j) = 0;
+      end
  end
+        
+    
 % S E T  computation for a single device, considering the chosen assignations 
 for i = 1:4
     RAT(i).n = connected(i);

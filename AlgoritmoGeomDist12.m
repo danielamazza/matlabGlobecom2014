@@ -1,10 +1,11 @@
 clear all;
 close all;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% In this case we are considering Throughput as Utility Function 
+% In this case we are considering Throughput as Utility Function
+% and 5 RATs (see above) 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % generation of pseudo random position for SMDs and association of APP
-NMDmax = 500;
+NMDmax = 5000;
 rng(1);
 pos = rand(2,NMDmax);
 rng(1);
@@ -13,7 +14,7 @@ app_n = randi(3,1,NMDmax);
 % Biased Randomization Values:
 p = 0.01; % 
 Nloop = 10;
-NMD = [500];
+NMD = [500 1000 2000 5000];
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -32,7 +33,9 @@ RAT1 = RAT(1,22,[0,0],100,0);
 RAT2 = RAT(1,22,[500,999],100,0);
 LTE  = RAT(1,100,[500,500],500,0);
 RAT3 = RAT(1,22,[1000,0],100,0);
-RAT  = [RAT1,RAT2,LTE, RAT3]; % RAT vector instance
+LTE2 = RAT(1,100,[1000,1000],100,0);
+RAT4 = RAT(1,22,[100,350],100,0);
+RAT  = [RAT1,RAT2,LTE, RAT3,LTE2, RAT4]; % RAT vector instance
 M = length(RAT); % number of RAT
 
 % Application instance
@@ -92,14 +95,14 @@ clearvars -except MD app CS1 RAT N M NMD p Nloop Sdef ...
 
 close all;
 for j=1:N 
-    for i=1:4
+    for i=1:M
         dist(j,i)= Distanza(RAT(i),MD(j));
         Th_K(j,i)= RAT(i).BWtot * log2(1+MD(j).SNR/(dist(j,i)^2));
     end
     distmin(j)= min(dist(j,:));
     ratsceltadist(j) = find(dist(j,:) == distmin(j),1, 'first');
 end
-for i = 1:4
+for i = 1:M
     RAT(i).n = sum(ratsceltadist == i);
 end
 
@@ -116,7 +119,7 @@ T_mindist_av(N) = mean(T_mindist);
 
 
 % riazzero per l'algoritmo seguente
-for i = 1:4
+for i = 1:M
     RAT(i).n = 0;
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
@@ -148,7 +151,7 @@ for j=1:N
     ratscelta(j) = find(S(j,:) == Smax(j),1, 'first');
     
     % resetting the not chosen RAT with the right connected number of devices
-    for i = 1:4
+    for i = 1:M
         if i ~= ratscelta(j)
             RAT(i).n = RAT(i).n - 1;
         end
@@ -208,7 +211,7 @@ for w=1:Nloop % number of loops calculating biased randomization
         % sorting of the S for the device j
         Ssorted(j,:) = sort(S2(j,:),'descend');
         % choice of a value with geometric distribution
-        choice = mod(geoinv(p,rand()),4)+1;
+        choice = mod(geoinv(p,rand()),M)+1;
         Schosen(j) = Ssorted(j,choice);
         % which RAT is chosen?
          ratsceltaRND(j) = find(S2(j,:) == Schosen(j),1, 'first');
@@ -221,13 +224,13 @@ for w=1:Nloop % number of loops calculating biased randomization
     end  
  % limitation of n = 100 for every RAT
  
- connected = [0 0 0 0];
+ connected = zeros(1:M);
 
  for j= 1:N
      connected(ratsceltaRND(j)) = connected(ratsceltaRND(j))+1;
  end
 % S E T  computation for a single device, considering the chosen assignations 
-for i = 1:4
+for i = 1:M
     RAT(i).n = connected(i);
 end
 for j=1:N

@@ -1,4 +1,4 @@
-function EnergiaOD = EnergiaOD( RAT,MD,App,CS)
+function EnergiaOD = EnergiaOD(RAT,MD,App,CS)
     % Rappresenta l'energia consumata dall'MD per 
     % trasferire il calcolo all'AP (idle + trasmissione)
          Strnew = Str(RAT, MD);
