@@ -1,12 +1,10 @@
 clear all;
 close all;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% In this case we are considering Throughput as Utility Function
-% and 4 RATs (see above) 
+% In this case we are considering the original  Utility Function 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % generation of pseudo random position for SMDs and association of APP
-NMD = [500 1000 2000]; %1000 2000 5000
-NMDmax = max(NMD);
+NMDmax = 5000;
 rng(1);
 pos = rand(2,NMDmax);
 rng(1);
@@ -15,6 +13,7 @@ app_n = randi(3,1,NMDmax);
 % Biased Randomization Values:
 p = 0.01; % 
 Nloop = 10;
+NMD = [500 1000];
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -33,7 +32,6 @@ RAT1 = RAT(1,22,[0,0],100,0);
 RAT2 = RAT(1,22,[500,999],100,0);
 LTE  = RAT(1,100,[500,500],500,0);
 RAT3 = RAT(1,22,[1000,0],100,0);
-
 RAT  = [RAT1,RAT2,LTE, RAT3]; % RAT vector instance
 M = length(RAT); % number of RAT
 
@@ -49,7 +47,7 @@ M = length(RAT); % number of RAT
 % Stro - reference value for f1(Str)
 % Eo - reference value for f2(E) 
 % To - reference value for f3(T)
-App1 = Application(1000,1000, 0.5,0.5,0.6,0.2,0.2,0.52e3,     2.9e3      ,25000 ); % application 1
+App1 = Application(2E7,10, 0.01,0.9,0.6,0.2,0.2,0.52e3,     2.9e3      ,25000 ); % application 1
 App2 = Application(1E7,10 ,0.01,0.9,0.2,0.2,0.6,1.42e3,     3.6e3       ,2500 ); % application 2
 App3 = Application(1.5E7,10 ,0.01,0.9,0.2,0.6,0.2,0.93e3,     7.1e3      ,75000 ); % application 3
 App = [App1,App2,App3]; % App vector instance
@@ -76,55 +74,51 @@ for j=1:NMDmax  % N = number of devices
    MD(j) = MobileDevice(0.3,400,1000,0.9,1.3,[pos(1,j)*1000,pos(2,j)*1000],800,true);
      
    % random requesting of application for the device     
-   app(j) = App1;
-   %App(app_n(j));
+   app(j) = App(app_n(j));
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
-%
-%  Computing the distance and the constant part of the througput
-%  (as RAT(i).n = 1
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-for j=1:NMDmax
-    for i=1:M
-        dist(j,i)= Distanza(RAT(i),MD(j));
-        Th_K(j,i)= RAT(i).BWtot * log2(1+MD(j).SNR/(dist(j,i)^2));
-    end
-    distmin(j)= min(dist(j,:));
-    ratsceltadist(j) = find(dist(j,:) == distmin(j),1, 'first');    
-end
-
-for N = NMD
-clearvars -except MD app CS1 RAT N M NMD p Nloop Sdef ...
-    dist Th_K distmin ratsceltadist ...
-    S_mindist_av E_mindist_av T_mindist_av ...
-    S_M_av       E_M_av       T_M_av ...
-    S_RND_av     E_RND_av     T_RND_av ...
-    Eloc_M Tloc_M ...
-    elabtimeGA   elabtimeBRA(N);
-
-close all;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
 %
 %  algorithm 0: Near Cell Association
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+for N = NMD
+clearvars -except MD app CS1 RAT N M NMD p Nloop Sdef ...
+    S_mindist_av E_mindist_av T_mindist_av ...
+    S_M_av       E_M_av       T_M_av ...
+    S_RND_av     E_RND_av     T_RND_av ...
+    elabtimeGA   elabtimeBRA(N);
+
+close all;
+for j=1:N 
+    for i=1:M
+        dist(j,i)= Distanza(RAT(i),MD(j));
+        Th_K(j,i)= RAT(i).BWtot * log2(1+MD(j).SNR/(dist(j,i)^2));
+    end
+    distmin(j)= min(dist(j,:));
+    ratsceltadist(j) = find(dist(j,:) == distmin(j),1, 'first');
+end
 for i = 1:M
-	RAT(i).n = sum(ratsceltadist(1:N) == i); % assignation of the MD to the nearest RAT
+    RAT(i).n = sum(ratsceltadist == i);
 end
 
 for j=1:N
-    Str_mindist(j) = Th_K(j,i)/RAT(ratsceltadist(j)).n;
+    Str_mindist(j) = (RAT(ratsceltadist(j)).BWtot/RAT(ratsceltadist(j)).n) * log2(1+MD(j).SNR/(distmin(j)^2));
     E_mindist(j)= EnergiapartialOD(RAT(ratsceltadist(j)),MD(j),app(j),CS1);
     T_mindist(j)= TempopartialOD(RAT(ratsceltadist(j)),MD(j),app(j),CS1);
 end
 % mean values of S E T 
-S_mindist_av(N) = mean(Str_mindist(1:N));
-E_mindist_av(N) = mean(E_mindist(1:N));
-T_mindist_av(N) = mean(T_mindist(1:N));
+S_mindist_av(N) = mean(Str_mindist);
+E_mindist_av(N) = mean(E_mindist);
+T_mindist_av(N) = mean(T_mindist);
 
+
+
+% riazzero per l'algoritmo seguente
+for i = 1:M
+    RAT(i).n = 0;
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
 %
 %  algorithm 1: Throughput Cell Association
@@ -137,11 +131,6 @@ S = zeros(N,M); % Throughput
 ratscelta = zeros(N,1);
 Smax = zeros(N,1);
 
-% reset assignation of the MD
-for i = 1:M
-    RAT(i).n = 0;
-end
-
 % Throughput computation for a single device, considering only the previous assignations 
    
 for j=1:N  
@@ -151,12 +140,18 @@ for j=1:N
     while cont <= M % for every RAT
         RAT(cont).n = RAT(cont).n + 1; % add a connection to the RAT            
         S(j,cont) = Str(RAT(cont),MD(j)); % computation of Throughput
+        E(j,cont)= EnergiapartialOD(RAT(cont),MD(j),app(j),CS1);
+        T(j,cont)= TempopartialOD(RAT(cont),MD(j),app(j),CS1);
+        F_1(j,cont) = F1(S(j,cont),app(j));
+        F_2(j,cont) = F2(E(j,cont),app(j));
+        F_3(j,cont) = F3(T(j,cont),app(j));
+        U(j,cont) = app(j).c1 * F_1(j,cont) + app(j).c2 * F_2(j,cont) + app(j).c3 * F_3(j,cont); 
         cont = cont + 1;
     end
     % find the RAT which maximize the Throughput
-    Smax(j) = max(S(j,:));
+    Umax(j) = max(U(j,:));
     % choose the RAT which maximize the Throughput
-    ratscelta(j) = find(S(j,:) == Smax(j),1, 'first');
+    ratscelta(j) = find(U(j,:) == Umax(j),1, 'first');
     
     % resetting the not chosen RAT with the right connected number of devices
     for i = 1:M
@@ -181,9 +176,9 @@ for j=1:N
 end
 
 % mean values of S E T and Utility Functon
-S_M_av(N) = mean(S_M(1:N));
-E_M_av(N) = mean(E_M(1:N));
-T_M_av(N) = mean(T_M(1:N));
+S_M_av(N) = mean(S_M);
+E_M_av(N) = mean(E_M);
+T_M_av(N) = mean(T_M);
 elabtimeGA(N) = toc(startGA);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -214,15 +209,21 @@ for w=1:Nloop % number of loops calculating biased randomization
         while cont <= M
             RAT(cont).n = RAT(cont).n + 1;
             S2(j,cont)= Str(RAT(cont),MD(j));
+            E2(j,cont)= EnergiapartialOD(RAT(cont),MD(j),app(j),CS1);
+            T2(j,cont)= TempopartialOD(RAT(cont),MD(j),app(j),CS1);
+            F2_1(j,cont) = F1(S(j,cont),app(j));
+            F2_2(j,cont) = F2(E(j,cont),app(j));
+            F2_3(j,cont) = F3(T(j,cont),app(j));
+            U2(j,cont) = app(j).c1 * F_1(j,cont) + app(j).c2 * F_2(j,cont) + app(j).c3 * F_3(j,cont); 
             cont = cont + 1;
         end
         % sorting of the S for the device j
-        Ssorted(j,:) = sort(S2(j,:),'descend');
+        Usorted(j,:) = sort(U2(j,:),'descend');
         % choice of a value with geometric distribution
         choice = mod(geoinv(p,rand()),M)+1;
-        Schosen(j) = Ssorted(j,choice);
+        Uchosen(j) = Usorted(j,choice);
         % which RAT is chosen?
-         ratsceltaRND(j) = find(S2(j,:) == Schosen(j),1, 'first');
+         ratsceltaRND(j) = find(U2(j,:) == Uchosen(j),1, 'first');
         % setting of the not chosen RAT with the right connected number of devices
         for i = 1:M
            if i ~= ratsceltaRND(j)
@@ -230,8 +231,9 @@ for w=1:Nloop % number of loops calculating biased randomization
            end
         end
     end  
+ % limitation of n = 100 for every RAT
  
- connected = zeros(1:M);
+ connected = zeros(1,M);
 
  for j= 1:N
      connected(ratsceltaRND(j)) = connected(ratsceltaRND(j))+1;
@@ -252,7 +254,7 @@ for j=1:N
     end
 end    
 %comparing Utility Function with the previous trials
-S_media = mean(S_RND(1:N)); 
+S_media = mean(S_RND); 
 if Sdef < S_media
         Sdef = S_media;
         ratsceltadef = ratsceltaRND;
@@ -272,9 +274,9 @@ end
 %     T_RND(j)= TempopartialOD(RAT(ratsceltadef(j)),MD(j),app(j),CS1);
 % end
 % mean values of S E T and Utility Functon
-S_RND_av(N) = mean(S_RND(1:N));
-E_RND_av(N) = mean(E_RND(1:N));
-T_RND_av(N) = mean(T_RND(1:N));
+S_RND_av(N) = mean(S_RND);
+E_RND_av(N) = mean(E_RND);
+T_RND_av(N) = mean(T_RND);
 elabtimeBRA(N) = toc(startBRA);
 
 
@@ -282,18 +284,8 @@ elabtimeBRA(N) = toc(startBRA);
 diversi = find(ratscelta-ratsceltadef);
 dch=length(diversi);
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  Local computation
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-for j=1:N
-    Eloc(j)= EnergiaLocale(MD(j),app(j));
-    Tloc(j)= TempoLocale(MD(j),app(j)); 
-end
 
-Eloc_M(N) = mean(Eloc(1:N));
-Tloc_M(N) = mean(Tloc(1:N));
+
 
 
 % print of results
@@ -342,45 +334,43 @@ fprintf('\n')
 
 fprintf(1,'************ Energy [mWs]**********');
 fprintf('\n')
-fprintf(1,'Nearest Node:                 ');
+fprintf(1,'nearest node:                 ');
 fprintf(1,'\b%.2f\n',E_mindist_av(N)/10^9); 
 
 fprintf('\n')
-fprintf(1,'Greedy Algorithm:                ');
+fprintf(1,'Ref Value:                ');
 E_GA(N)= E_M_av(N)/10^9;
 
 fprintf(1,'\b%.2f\n',E_M_av(N)/10^9); 
-fprintf(1,'Biased Rand Algorithm:      ');
+fprintf(1,'Biased Rand Utility:      ');
 
 E_BRA(N)= E_RND_av(N)/10^9;
 fprintf(1,'\b%.2f\n',E_RND_av(N)/10^9); 
 if E_M_av(N) < E_RND_av(N)
-    fprintf(1,'BRA is WORSE:                   ');
+    fprintf(1,'WORSE:                   ');
 elseif E_M_av(N) > E_RND_av(N) 
-    fprintf(1,'BRA is BETTER:                 ');
+    fprintf(1,'BETTER:                 ');
 else
-    fprintf(1,'BRA NOT IMPROVES               ');
+    fprintf(1,'NOT IMPROVED               ');
 end
 fprintf('\n')
 
 E_p(N) = (E_RND_av(N)-E_M_av(N))*100/E_M_av(N);
-fprintf(1,'\b%.2f',E_p(N));
+fprintf(1,'\b%.2f',(E_RND_av(N)-E_M_av(N))*100/E_M_av(N));
 fprintf(1,'%%');
 fprintf('\n')
-fprintf(1,'Local Computation:      ');
-fprintf(1,'\b%.2f\n',Eloc_M(N)/10^9);
-fprintf('\n')
+
 fprintf(1,'************ Time [s]**********');
 fprintf('\n')
-fprintf(1,'Nearest Node:                 ');
+fprintf(1,'nearest node:                 ');
 fprintf(1,'\b%.2f\n',T_mindist_av(N)/10^9); 
 
 fprintf('\n')
-fprintf(1,'Greedy Algorithm:                 ');
+fprintf(1,'Ref Value:                 ');
 
 T_GA(N) = T_M_av(N)/10^9;
 fprintf(1,'\b%.2f\n',T_M_av(N)/10^9); 
-fprintf(1,'Biased Rand Algorithm:       ');
+fprintf(1,'Biased Rand Utility:       ');
 
 T_BRA(N) = T_RND_av(N)/10^9;
 fprintf(1,'\b%.2f\n',T_BRA(N));
@@ -395,11 +385,8 @@ end
 fprintf('\n')
 
 T_p(N) = (T_RND_av(N)-T_M_av(N))*100/T_M_av(N);
-fprintf(1,'\b%.2f',T_p(N));
+fprintf(1,'\b%.2f',(T_RND_av(N)-T_M_av(N))*100/T_M_av(N));
 fprintf(1,'%%');
-fprintf('\n')
-fprintf(1,'Local Computation:      ');
-fprintf(1,'\b%.2f\n',Tloc_M(N)/10^9);
 fprintf('\n')
 
 
@@ -426,7 +413,7 @@ fprintf(1,'\b%.2f',se);
 fprintf('\n')
 end
 %clearvars -except N p Nloop NMD S_mindist_av E_mindist_av T_mindist_av S_M_av E_M_av T_M_av elabtimeGA S_RND_av E_RND_av T_RND_av(N) elabtimeBRA(N);
-figure('Name','Throughput');
+figure;
 loglog(NMD,S_mindist_av(NMD),'-*',NMD,S_M_av(NMD),'-v',NMD,S_RND_av(NMD),'-o')
 legend('Nearest Node Algorithm','Gready Heuristic','Biased-randomized Algorithm');
 title(['Throughput']);
@@ -434,17 +421,17 @@ xlabel(['Mobile Devices [n]']);
 ylabel('Throughput [pbs]','interpreter','latex')
 grid on;
 
-figure('Name','Energy');
-loglog(NMD,E_mindist_av(NMD),'-*',NMD,E_M_av(NMD),'-v',NMD,E_RND_av(NMD),'-o',NMD,Eloc_M(NMD),'-s')
-legend('Nearest Node Algorithm','Gready Heuristic','Biased-randomized Algorithm','Local Computation');
+figure;
+loglog(NMD,E_mindist_av(NMD),'-*',NMD,E_M_av(NMD),'-v',NMD,E_RND_av(NMD),'-o')
+legend('Nearest Node Algorithm','Gready Heuristic','Biased-randomized Algorithm');
 title(['Energy']);
 xlabel(['Mobile Devices [n]']);
 ylabel('Energy []','interpreter','latex')
 grid on;
 
-figure('Name','Time');
-loglog(NMD,T_mindist_av(NMD),'-*',NMD,T_M_av(NMD),'-v',NMD,T_RND_av(NMD),'-o',NMD,Tloc_M(NMD),'-s')
-legend('Nearest Node Algorithm','Gready Heuristic','Biased-randomized Algorithm','Local Computation');
+figure;
+loglog(NMD,T_mindist_av(NMD),'-*',NMD,T_M_av(NMD),'-v',NMD,T_RND_av(NMD),'-o')
+legend('Nearest Node Algorithm','Gready Heuristic','Biased-randomized Algorithm');
 title(['Computation Time']);
 xlabel(['Mobile Devices [n]']);
 ylabel('Time [s]','interpreter','latex')
